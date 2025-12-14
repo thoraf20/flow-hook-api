@@ -1,0 +1,644 @@
+openapi: 3.0.3
+info:
+  title: FlowHook API
+  description: |
+    FlowHook is a webhook testing and inspection platform. This API allows you to:
+    - Create and manage webhook endpoints
+    - Capture and inspect incoming webhooks
+    - Replay requests to other URLs
+    - Configure auto-forwarding rules
+    - Transform requests/responses
+    - View analytics and delivery statistics
+  version: 1.0.0
+  contact:
+    name: FlowHook Support
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.flowhook.com
+    description: Production server
+
+tags:
+  - name: Endpoints
+    description: Webhook endpoint management
+  - name: Requests
+    description: Request capture and inspection
+  - name: Replay
+    description: Request replay functionality
+  - name: Forwarding
+    description: Auto-forwarding rules
+  - name: Transformations
+    description: Request/response transformations
+  - name: Analytics
+    description: Analytics and statistics
+  - name: Authentication
+    description: User authentication
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns the health status of the API
+      tags:
+        - System
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: string
+                    example: 2h30m15s
+                  database:
+                    type: string
+                    example: connected
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/v1/metrics:
+    get:
+      summary: Get system metrics
+      description: Returns detailed system and application metrics
+      tags:
+        - System
+      responses:
+        '200':
+          description: Metrics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Metrics'
+
+  /api/v1/endpoints:
+    post:
+      summary: Create endpoint
+      description: Creates a new webhook endpoint
+      tags:
+        - Endpoints
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: My Webhook Endpoint
+      responses:
+        '201':
+          description: Endpoint created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Endpoint'
+    get:
+      summary: List endpoints
+      description: Returns a list of all endpoints
+      tags:
+        - Endpoints
+      responses:
+        '200':
+          description: List of endpoints
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Endpoint'
+
+  /api/v1/endpoints/{slug}:
+    get:
+      summary: Get endpoint
+      description: Returns endpoint details by slug
+      tags:
+        - Endpoints
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Endpoint details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Endpoint'
+
+  /api/v1/endpoints/{slug}/requests:
+    get:
+      summary: List requests
+      description: Returns paginated list of requests for an endpoint
+      tags:
+        - Requests
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: method
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: List of requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Request'
+                  total:
+                    type: integer
+
+  /api/v1/requests/{id}:
+    get:
+      summary: Get request details
+      description: Returns full details of a captured request
+      tags:
+        - Requests
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Request details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestDetail'
+
+  /api/v1/requests/{id}/export:
+    get:
+      summary: Export request
+      description: Exports a request in various formats
+      tags:
+        - Requests
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [curl, json, httpie, har]
+            default: curl
+      responses:
+        '200':
+          description: Exported request
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+
+  /api/v1/requests/{id}/replay:
+    post:
+      summary: Replay request
+      description: Replays a captured request to a new URL
+      tags:
+        - Replay
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - target_url
+              properties:
+                target_url:
+                  type: string
+                  format: uri
+                method:
+                  type: string
+                headers:
+                  type: object
+                body:
+                  type: string
+      responses:
+        '200':
+          description: Replay initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  replay_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+
+  /api/v1/endpoints/{slug}/forwarding-rules:
+    post:
+      summary: Create forwarding rule
+      description: Creates a new forwarding rule for an endpoint
+      tags:
+        - Forwarding
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - target_url
+              properties:
+                target_url:
+                  type: string
+                  format: uri
+                method:
+                  type: string
+                headers:
+                  type: object
+                max_retries:
+                  type: integer
+                enabled:
+                  type: boolean
+      responses:
+        '201':
+          description: Forwarding rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForwardingRule'
+    get:
+      summary: List forwarding rules
+      description: Returns all forwarding rules for an endpoint
+      tags:
+        - Forwarding
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of forwarding rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ForwardingRule'
+
+  /api/v1/endpoints/{slug}/analytics:
+    get:
+      summary: Get analytics
+      description: Returns analytics data for an endpoint
+      tags:
+        - Analytics
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: hours
+          in: query
+          schema:
+            type: integer
+            default: 24
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_requests:
+                    type: integer
+                  recent_requests:
+                    type: integer
+                  method_distribution:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        method:
+                          type: string
+                        count:
+                          type: integer
+                  hourly_requests:
+                    type: array
+                    items:
+                      type: object
+
+  /api/v1/endpoints/{slug}/delivery-stats:
+    get:
+      summary: Get delivery statistics
+      description: Returns delivery statistics for forwarding rules
+      tags:
+        - Analytics
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: hours
+          in: query
+          schema:
+            type: integer
+            default: 24
+      responses:
+        '200':
+          description: Delivery statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  time_range_hours:
+                    type: integer
+                  rules:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rule_id:
+                          type: string
+                        target_url:
+                          type: string
+                        total:
+                          type: integer
+                        successful:
+                          type: integer
+                        failed:
+                          type: integer
+                        success_rate:
+                          type: number
+
+  /api/v1/auth/register:
+    post:
+      summary: Register user
+      description: Creates a new user account
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                name:
+                  type: string
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+
+  /api/v1/auth/login:
+    post:
+      summary: Login
+      description: Authenticates a user and returns a session token
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+
+components:
+  schemas:
+    Endpoint:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Request:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        method:
+          type: string
+        path:
+          type: string
+        body_size:
+          type: integer
+        received_at:
+          type: string
+          format: date-time
+
+    RequestDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        method:
+          type: string
+        path:
+          type: string
+        headers:
+          type: object
+        query_params:
+          type: object
+        body:
+          type: string
+        ip:
+          type: string
+        received_at:
+          type: string
+          format: date-time
+
+    ForwardingRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        endpoint_id:
+          type: string
+          format: uuid
+        target_url:
+          type: string
+        method:
+          type: string
+        enabled:
+          type: boolean
+        max_retries:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Metrics:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        uptime:
+          type: string
+        system:
+          type: object
+          properties:
+            go_version:
+              type: string
+            num_goroutines:
+              type: integer
+            memory:
+              type: object
+        database:
+          type: object
+          properties:
+            status:
+              type: string
+            total_endpoints:
+              type: integer
+            total_requests:
+              type: integer
+        endpoints:
+          type: object
+        requests:
+          type: object
+        forwarding:
+          type: object
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []
+
