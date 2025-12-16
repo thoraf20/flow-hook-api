@@ -63,6 +63,11 @@ func main() {
 				if config.AppConfig != nil && len(config.AppConfig.AllowedOrigins) > 0 {
 					if middleware.ValidateOrigin(r, config.AppConfig.AllowedOrigins) {
 						allowedOrigin = origin
+					} else {
+						// Log rejected origin for debugging (only in development)
+						if config.AppConfig.Environment == "development" {
+							log.Printf("CORS: Origin '%s' not in allowed list: %v", origin, config.AppConfig.AllowedOrigins)
+						}
 					}
 					// If validation fails, allowedOrigin remains empty (no CORS header)
 				} else {
@@ -71,17 +76,28 @@ func main() {
 				}
 			}
 
+			// Always set CORS headers for preflight requests (OPTIONS)
+			// This ensures browsers get a proper response even if origin is not allowed
+			if r.Method == "OPTIONS" {
+				if allowedOrigin != "" {
+					w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+				}
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token")
+				w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token")
+				w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			// For actual requests, only set CORS headers if origin is allowed
 			if allowedOrigin != "" {
 				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
-			}
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token")
-			w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token")
-
-			if r.Method == "OPTIONS" {
-				w.WriteHeader(http.StatusOK)
-				return
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token")
+				w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token")
 			}
 
 			next(w, r)
