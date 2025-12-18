@@ -17,7 +17,6 @@ import (
 )
 
 func main() {
-	// Load configuration first (before any config access)
 	config.Load()
 	
 	// Initialize database
