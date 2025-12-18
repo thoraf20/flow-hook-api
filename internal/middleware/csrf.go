@@ -27,8 +27,8 @@ func CSRFMiddleware(next http.HandlerFunc) http.HandlerFunc {
 					Value:    token,
 					Path:     "/",
 					HttpOnly: false, // JavaScript needs access for API calls
-					SameSite: http.SameSiteStrictMode,
-					Secure:   r.TLS != nil, // Only secure in HTTPS
+					SameSite: http.SameSiteNoneMode,
+					Secure:   true, // Required for SameSite=None
 					MaxAge:   86400,        // 24 hours
 				})
 			}
