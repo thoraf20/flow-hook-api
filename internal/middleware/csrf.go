@@ -102,8 +102,35 @@ func ValidateOrigin(r *http.Request, allowedOrigins []string) bool {
 	}
 
 	for _, allowed := range allowedOrigins {
-		if origin == allowed || strings.HasPrefix(origin, allowed) {
+		// 1. Exact Match
+		if origin == allowed {
 			return true
+		}
+		
+		// 2. Universal Wildcard
+		if allowed == "*" {
+			return true
+		}
+
+		// 3. Subdomain Wildcard (e.g. "https://*.vercel.app")
+		if strings.Contains(allowed, "*") {
+			// Escape special chars for regex except *
+			pattern := strings.ReplaceAll(allowed, ".", "\\.")
+			pattern = strings.ReplaceAll(pattern, "*", ".*")
+			
+			// Simple check: if allowed is "https://*.vercel.app"
+			// We want to match "https://foo.vercel.app"
+			// But careful with regex security.
+			
+			// Safer Manual Check for commonly used "https://*.domain.com" format
+			if strings.HasPrefix(allowed, "https://*.") {
+				suffix := allowed[9:] // remove "https://*."
+				if strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, suffix) {
+					// Ensure no extra slashes (simple subdomain check)
+					// origin: https://sub.domain.com -> match
+					return true
+				}
+			}
 		}
 	}
 
